@@ -1,7 +1,7 @@
 # OpenWrt Ubus Integration for Home Assistant
 
-[![Validate with hassfest](https://github.com/FUjr/homeassistant-openwrt-ubus/actions/workflows/hassfest.yml/badge.svg?branch=dev)](https://github.com/FUjr/homeassistant-openwrt-ubus/actions/workflows/hassfest.yml)
-[![Validate](https://github.com/FUjr/homeassistant-openwrt-ubus/actions/workflows/validate.yml/badge.svg?branch=dev)](https://github.com/FUjr/homeassistant-openwrt-ubus/actions/workflows/validate.yml)
+[![Validate with hassfest]([[https://github.com/FUjr/homeassistant-openwrt-ubus](https://github.com/PastorShlag/homeassistant-openwrt-ubus)](https://github.com/PastorShlag/homeassistant-openwrt-ubus)/actions/workflows/hassfest.yml/badge.svg?branch=dev)]([https://github.com/FUjr/homeassistant-openwrt-ubus](https://github.com/PastorShlag/homeassistant-openwrt-ubus)/actions/workflows/hassfest.yml)
+[![Validate]([https://github.com/FUjr/homeassistant-openwrt-ubus](https://github.com/PastorShlag/homeassistant-openwrt-ubus)/actions/workflows/validate.yml/badge.svg?branch=dev)]([https://github.com/FUjr/homeassistant-openwrt-ubus](https://github.com/PastorShlag/homeassistant-openwrt-ubus)/actions/workflows/validate.yml)
 
 [中文版本](README_zh.md) | **English Version**
 
