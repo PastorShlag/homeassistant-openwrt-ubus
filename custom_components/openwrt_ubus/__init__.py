@@ -22,6 +22,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .Ubus.interface import AuthenticationError
 from .Ubus.const import API_DEF_TIMEOUT
+from .const import split_entry_data
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
@@ -60,6 +61,13 @@ from .runtime import OpenwrtRuntimeData
 from .services import async_setup_services
 from .shared_data_manager import SharedUbusDataManager
 
+from datetime import timedelta
+from typing import Any
+
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
+
+from .stale_devices import StaleDeviceCleaner, async_remove_storage
+
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -71,19 +79,30 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate old entries: settings move from entry.data to entry.options (version 2)."""
+    if entry.version > 2:
+        return False  # created by a newer version of the integration
+
+    if entry.version == 1:
+        connection, options = split_entry_data(entry.data)
+        options = {**options, **entry.options}
+        # Entries created before the NLBWMon toggle existed kept the sensor enabled
+        options.setdefault(CONF_ENABLE_NLBWMON_SENSORS, True)
+        hass.config_entries.async_update_entry(entry, data=connection, options=options, version=2)
+        _LOGGER.info("Migrated config entry %s to version 2 (settings moved to options)", entry.title)
+
+    return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the entry when its data or options change."""
+    hass.config_entries.async_schedule_reload(entry.entry_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up openwrt ubus from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-
-    # Backward compatibility: preserve pre-toggle behavior for legacy entries.
-    # New entries get an explicit value from config flow (default off).
-    if CONF_ENABLE_NLBWMON_SENSORS not in entry.data:
-        new_data = dict(entry.data)
-        new_data[CONF_ENABLE_NLBWMON_SENSORS] = True
-        hass.config_entries.async_update_entry(entry, data=new_data)
-        entry = hass.config_entries.async_get_entry(entry.entry_id)
-        if entry is None:
-            raise ConfigEntryNotReady("Failed to reload config entry data for nlbwmon migration")
 
     # Test connection before setting up platforms
     hostname = entry.data[CONF_HOST]
@@ -167,6 +186,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             nlbwmon_available=nlbwmon_available,
         )
 
+        # Removes client devices that have not been seen for a long time
+        cleaner = StaleDeviceCleaner(hass, entry)
+        await cleaner.async_load()
+        data_manager.stale_cleaner = cleaner
+
     except ConfigEntryAuthFailed:
         raise
     except Exception as exc:
@@ -183,6 +207,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Clean up vanished client devices: first run 10 minutes after start, then every 6 hours
+    async def _async_cleanup_stale_devices(_now: Any = None) -> None:
+        if removed := data_manager.stale_cleaner.async_cleanup():
+            _LOGGER.debug("Removed %d stale device(s)", len(removed))
+
+    entry.async_on_unload(async_call_later(hass, 600, _async_cleanup_stale_devices))
+    entry.async_on_unload(async_track_time_interval(hass, _async_cleanup_stale_devices, timedelta(hours=6)))
+
+    # Reload when the options flow (or a reauth) changes the entry
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     # Clean up devices for disabled sensors after setting up platforms
     # This ensures devices exist before we try to clean them up
@@ -293,6 +328,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except Exception as exc:  # noqa: BLE001
                 _LOGGER.debug("Error shutting down coordinator: %s", exc)
         try:
+            if runtime.data_manager.stale_cleaner is not None:
+                await runtime.data_manager.stale_cleaner.async_flush()
             await runtime.data_manager.logout()
             await runtime.data_manager.close()
         except Exception as exc:  # noqa: BLE001
@@ -321,3 +358,4 @@ async def async_remove_config_entry_device(_: HomeAssistant, entry: ConfigEntry,
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Forget the tracking-method memory of a removed entry."""
     hass.data.get(DOMAIN, {}).pop(f"tracking_method_{entry.entry_id}", None)
+    await async_remove_storage(hass, entry.entry_id)

@@ -1,0 +1,484 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "OpenWrt ubus: подключение",
+        "description": "Подключение к роутеру OpenWrt через ubus для отслеживания устройств и мониторинга системы",
+        "data": {
+          "host": "Хост",
+          "ip_address": "IP-адрес",
+          "use_https": "Использовать HTTPS",
+          "port": "Порт",
+          "verify_ssl": "Проверять SSL-сертификат",
+          "endpoint": "Путь ubus",
+          "username": "Имя пользователя",
+          "password": "Пароль",
+          "wireless_software": "Источник данных о Wi-Fi",
+          "dhcp_software": "Источник данных DHCP",
+          "tracking_method": "Режим отслеживания"
+        }
+      },
+      "sensors": {
+        "title": "OpenWrt ubus: выбор сенсоров",
+        "description": "Выберите, какие сенсоры включить для {host}",
+        "data": {
+          "enable_system_sensors": "Системные сенсоры",
+          "enable_qmodem_sensors": "Сенсоры QModem",
+          "enable_sta_sensors": "Сенсоры клиентов Wi-Fi (нужен iwinfo)",
+          "enable_ap_sensors": "Сенсоры точек доступа",
+          "enable_eth_sensors": "Сенсоры сетевых интерфейсов",
+          "enable_mwan3_sensors": "Сенсоры mwan3 (если mwan3 установлен)",
+          "enable_nlbwmon_sensors": "Сенсор топа хостов NLBWMon",
+          "enable_service_controls": "Управление службами",
+          "enable_device_kick_buttons": "Кнопки отключения клиентов (нужен hostapd)",
+          "enable_wireless_trackers": "Отслеживание Wi-Fi-устройств",
+          "enable_wired_tracker": "Отслеживание проводных устройств"
+        }
+      },
+      "wireless_tracker_config": {
+        "title": "OpenWrt ubus: трекер Wi-Fi-устройств",
+        "description": "Фильтры отслеживания Wi-Fi-устройств для {host}. Оставьте белый список пустым, чтобы отслеживать все подключённые устройства.",
+        "data": {
+          "wireless_tracker_whitelist": "Белый список (префиксы IP/MAC через запятую)"
+        }
+      },
+      "sta_sensors_config": {
+        "title": "OpenWrt ubus: выбор клиентов Wi-Fi",
+        "description": "Выберите Wi-Fi-устройства, для которых нужно создать сенсоры. Список показывает только устройства, видимые через iwinfo. Если он пуст, убедитесь, что iwinfo установлен и подключено хотя бы одно устройство.\n\nХост: {host}",
+        "data": {
+          "select_all_sta": "Все подключённые клиенты (без фильтра)",
+          "selected_sta": "Отслеживаемые устройства"
+        }
+      },
+      "services": {
+        "title": "OpenWrt ubus: выбор служб",
+        "description": "Выберите службы для управления на {host} (найдено служб: {services_count})",
+        "data": {
+          "selected_services": "Управляемые службы"
+        }
+      },
+      "timeouts": {
+        "title": "OpenWrt ubus: интервалы обновления",
+        "description": "Интервалы обновления сенсоров для {host}",
+        "data": {
+          "system_sensor_timeout": "Системные сенсоры (секунд)",
+          "qmodem_sensor_timeout": "Сенсоры QModem (секунд)",
+          "sta_sensor_timeout": "Сенсоры клиентов (секунд)",
+          "ap_sensor_timeout": "Сенсоры точек доступа (секунд)",
+          "service_timeout": "Состояние служб (секунд)",
+          "mwan3_sensor_timeout": "Состояние mwan3 (секунд)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Повторная авторизация: {host}",
+        "description": "Роутер отклонил сохранённые учётные данные. Введите актуальные имя пользователя и пароль.",
+        "data": {
+          "username": "Имя пользователя",
+          "password": "Пароль"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не удалось подключиться",
+      "invalid_auth": "Неверное имя пользователя или пароль",
+      "unknown": "Непредвиденная ошибка",
+      "cannot_get_services": "Не удалось получить список служб",
+      "no_services_found": "На роутере не найдено служб"
+    },
+    "abort": {
+      "already_configured": "Это устройство уже настроено",
+      "reauth_successful": "Повторная авторизация выполнена"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Настройка OpenWrt ubus",
+        "description": "Типы сенсоров, интервалы обновления и другие параметры роутера {host}",
+        "data": {
+          "use_https": "Использовать HTTPS",
+          "port": "Порт",
+          "verify_ssl": "Проверять SSL-сертификат",
+          "endpoint": "Путь ubus",
+          "wireless_software": "Источник данных о Wi-Fi",
+          "dhcp_software": "Источник данных DHCP",
+          "enable_system_sensors": "Системные сенсоры",
+          "enable_qmodem_sensors": "Сенсоры QModem",
+          "enable_sta_sensors": "Сенсоры клиентов Wi-Fi (нужен iwinfo)",
+          "select_all_sta": "Все подключённые клиенты (без фильтра)",
+          "enable_ap_sensors": "Сенсоры точек доступа",
+          "enable_eth_sensors": "Сенсоры сетевых интерфейсов",
+          "enable_mwan3_sensors": "Сенсоры mwan3 (если mwan3 установлен)",
+          "enable_nlbwmon_sensors": "Сенсор топа хостов NLBWMon",
+          "enable_service_controls": "Управление службами",
+          "enable_device_kick_buttons": "Кнопки отключения клиентов",
+          "enable_reboot_button": "Кнопка перезагрузки",
+          "enable_wireless_trackers": "Отслеживание Wi-Fi-устройств",
+          "wireless_tracker_whitelist": "Белый список Wi-Fi-устройств",
+          "enable_wired_tracker": "Отслеживание проводных устройств",
+          "wired_tracker_name_priority": "Чем называть проводное устройство",
+          "wired_tracker_whitelist": "Белый список проводных устройств",
+          "wired_tracker_interfaces": "Интерфейсы проводных устройств",
+          "selected_services": "Управляемые службы",
+          "refresh_services": "Обновить список служб",
+          "system_sensor_timeout": "Системные сенсоры (секунд)",
+          "qmodem_sensor_timeout": "Сенсоры QModem (секунд)",
+          "sta_sensor_timeout": "Сенсоры клиентов (секунд)",
+          "ap_sensor_timeout": "Сенсоры точек доступа (секунд)",
+          "mwan3_sensor_timeout": "Состояние mwan3 (секунд)",
+          "tracking_method": "Режим отслеживания",
+          "consider_home": "Время «дома» после пропадания (секунд)",
+          "stale_device_days": "Удалять устройства, не появлявшиеся (дней)"
+        },
+        "data_description": {
+          "use_https": "Использовать HTTPS (SSL/TLS) при подключении к роутеру",
+          "port": "Свой порт (оставьте пустым для порта по умолчанию: HTTP 80, HTTPS 443)",
+          "verify_ssl": "Проверять SSL-сертификат роутера",
+          "endpoint": "Путь ubus (по умолчанию ubus). Измените, если роутер работает через обратный прокси или нестандартный путь",
+          "wireless_software": "Источник данных о Wi-Fi: iwinfo или hostapd",
+          "dhcp_software": "Источник данных об арендах DHCP",
+          "enable_system_sensors": "Аптайм, память, нагрузка роутера",
+          "enable_qmodem_sensors": "Сотовый модем (если есть)",
+          "enable_sta_sensors": "Подключённые Wi-Fi-устройства и их статистика (нужен iwinfo)",
+          "select_all_sta": "Если включено, сенсоры создаются для ВСЕХ подключённых устройств без фильтра",
+          "enable_ap_sensors": "Информация об интерфейсах точек доступа (параметры Wi-Fi-сетей)",
+          "enable_eth_sensors": "Статистика сетевых интерфейсов",
+          "enable_nlbwmon_sensors": "Топ хостов по трафику через nlbwmon (нужны /usr/sbin/nlbw и право file.exec в ubus)",
+          "enable_device_kick_buttons": "Кнопки отключения устройств от точек доступа (нужен hostapd)",
+          "enable_wired_tracker": "Отслеживать проводные устройства по таблице соседей (Wi-Fi-устройства исключаются)",
+          "wired_tracker_name_priority": "Если имени хоста нет, использовать IPv4, IPv6 или MAC-адрес как имя устройства",
+          "wired_tracker_whitelist": "Префиксы IP или MAC через запятую (например, 192.168.1,fe80,AA:BB:CC). Пусто = все проводные устройства",
+          "wired_tracker_interfaces": "Имена интерфейсов через запятую (например, br-lan). Пусто = все интерфейсы",
+          "system_sensor_timeout": "Как часто обновлять системные данные (10–300 секунд)",
+          "qmodem_sensor_timeout": "Как часто обновлять данные модема (30–600 секунд)",
+          "sta_sensor_timeout": "Как часто обновлять данные клиентов (10–300 секунд)",
+          "ap_sensor_timeout": "Как часто обновлять данные точек доступа (30–600 секунд)",
+          "tracking_method": "'uniqueid': только MAC-адрес (устройство роуминг между точками); 'combined': точка + MAC (отдельные сущности для каждой точки)",
+          "mwan3_sensor_timeout": "Как часто обновлять состояние mwan3 (30–600 секунд)",
+          "enable_mwan3_sensors": "Состояние балансировки нагрузки между WAN (mwan3)",
+          "consider_home": "Сколько устройство остаётся «дома» после последнего появления в сети (0–1800 секунд)",
+          "stale_device_days": "Клиентские устройства, которых не было на роутере столько дней, удаляются из Home Assistant. 0 отключает очистку"
+        }
+      },
+      "sta_sensors_config": {
+        "title": "OpenWrt ubus: выбор клиентов Wi-Fi",
+        "description": "Выберите Wi-Fi-устройства, для которых нужно создать сенсоры. Список показывает только устройства, видимые через iwinfo. Если он пуст, убедитесь, что iwinfo установлен и подключено хотя бы одно устройство.\n\nХост: {host}",
+        "data": {
+          "select_all_sta": "Все подключённые клиенты (без фильтра)",
+          "selected_sta": "Отслеживаемые устройства"
+        }
+      },
+      "services": {
+        "title": "OpenWrt ubus: выбор служб",
+        "description": "Выберите службы для управления на {host} (найдено служб: {services_count})",
+        "data": {
+          "selected_services": "Управляемые службы"
+        }
+      }
+    },
+    "error": {
+      "cannot_get_services": "Не удалось получить список служб",
+      "no_services_found": "На роутере не найдено служб"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "uptime": {
+        "name": "Время работы"
+      },
+      "load_1": {
+        "name": "Нагрузка (1 мин)"
+      },
+      "load_5": {
+        "name": "Нагрузка (5 мин)"
+      },
+      "load_15": {
+        "name": "Нагрузка (15 мин)"
+      },
+      "memory_total": {
+        "name": "Память: всего"
+      },
+      "memory_free": {
+        "name": "Память: свободно"
+      },
+      "memory_buffered": {
+        "name": "Память: буферы"
+      },
+      "memory_shared": {
+        "name": "Память: общая"
+      },
+      "memory_usage_percent": {
+        "name": "Использование памяти"
+      },
+      "swap_total": {
+        "name": "Подкачка: всего"
+      },
+      "swap_free": {
+        "name": "Подкачка: свободно"
+      },
+      "board_kernel": {
+        "name": "Версия ядра"
+      },
+      "board_hostname": {
+        "name": "Имя хоста"
+      },
+      "board_model": {
+        "name": "Модель платы"
+      },
+      "board_system": {
+        "name": "Система"
+      },
+      "qmodem_manufacturer": {
+        "name": "Производитель модема"
+      },
+      "qmodem_revision": {
+        "name": "Ревизия модема"
+      },
+      "qmodem_at_port": {
+        "name": "AT-порт модема"
+      },
+      "qmodem_temperature": {
+        "name": "Температура модема"
+      },
+      "qmodem_voltage": {
+        "name": "Напряжение модема"
+      },
+      "qmodem_connect_status": {
+        "name": "Состояние подключения модема"
+      },
+      "qmodem_sim_status": {
+        "name": "Состояние SIM"
+      },
+      "qmodem_isp": {
+        "name": "Оператор связи"
+      },
+      "qmodem_sim_slot": {
+        "name": "Слот SIM"
+      },
+      "qmodem_imei": {
+        "name": "IMEI"
+      },
+      "qmodem_imsi": {
+        "name": "IMSI"
+      },
+      "qmodem_iccid": {
+        "name": "ICCID"
+      },
+      "qmodem_lte_rsrp": {
+        "name": "LTE RSRP"
+      },
+      "qmodem_lte_rsrq": {
+        "name": "LTE RSRQ"
+      },
+      "qmodem_lte_rssi": {
+        "name": "LTE RSSI"
+      },
+      "qmodem_lte_sinr": {
+        "name": "LTE SINR"
+      },
+      "qmodem_nr5g_rsrp": {
+        "name": "5G NR RSRP"
+      },
+      "qmodem_nr5g_rsrq": {
+        "name": "5G NR RSRQ"
+      },
+      "qmodem_nr5g_sinr": {
+        "name": "5G NR SINR"
+      },
+      "signal": {
+        "name": "Уровень сигнала"
+      },
+      "signal_avg": {
+        "name": "Средний уровень сигнала"
+      },
+      "noise": {
+        "name": "Уровень шума"
+      },
+      "connected_time": {
+        "name": "Время подключения"
+      },
+      "rx_rate": {
+        "name": "Скорость приёма"
+      },
+      "tx_rate": {
+        "name": "Скорость передачи"
+      },
+      "rx_packets": {
+        "name": "Принято пакетов"
+      },
+      "tx_packets": {
+        "name": "Отправлено пакетов"
+      },
+      "rx_bytes": {
+        "name": "Принято данных"
+      },
+      "tx_bytes": {
+        "name": "Отправлено данных"
+      },
+      "ssid": {
+        "name": "SSID"
+      },
+      "bssid": {
+        "name": "BSSID"
+      },
+      "channel": {
+        "name": "Канал"
+      },
+      "frequency": {
+        "name": "Частота"
+      },
+      "txpower": {
+        "name": "Мощность передатчика"
+      },
+      "quality": {
+        "name": "Качество сигнала"
+      },
+      "bitrate": {
+        "name": "Скорость соединения"
+      },
+      "mode": {
+        "name": "Режим"
+      },
+      "hwmode": {
+        "name": "Аппаратный режим"
+      },
+      "htmode": {
+        "name": "Режим HT"
+      },
+      "country": {
+        "name": "Страна"
+      }
+    },
+    "switch": {
+      "service": {
+        "name": "Служба {service_name}",
+        "state_attributes": {
+          "service_name": {
+            "name": "Имя службы"
+          },
+          "host": {
+            "name": "Хост роутера"
+          }
+        }
+      }
+    },
+    "button": {
+      "service_restart": {
+        "name": "Перезапустить {service_name}",
+        "state_attributes": {
+          "service_name": {
+            "name": "Имя службы"
+          },
+          "host": {
+            "name": "Хост роутера"
+          },
+          "action": {
+            "name": "Действие"
+          }
+        }
+      },
+      "system_reboot": {
+        "name": "Перезагрузить"
+      },
+      "device_kick": {
+        "name": "Отключить {device_name}",
+        "state_attributes": {
+          "mac_address": {
+            "name": "MAC-адрес"
+          },
+          "ap_device": {
+            "name": "Точка доступа"
+          },
+          "hostname": {
+            "name": "Имя хоста"
+          },
+          "signal": {
+            "name": "Уровень сигнала"
+          },
+          "connected_time": {
+            "name": "Время подключения"
+          },
+          "authorized": {
+            "name": "Авторизовано"
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "uci_get": {
+      "name": "UCI: прочитать значение",
+      "description": "Читает значение UCI на роутере через ubus и при желании записывает его в состояние сущности",
+      "fields": {
+        "config_entry_id": {
+          "name": "Роутер",
+          "description": "Роутер, к которому обращаться. Можно не указывать, если настроен один роутер"
+        },
+        "config": {
+          "name": "Конфигурация",
+          "description": "Имя конфигурации UCI (например, firewall)"
+        },
+        "section": {
+          "name": "Секция",
+          "description": "Имя секции или тип/индекс (например, @rule[3])"
+        },
+        "option": {
+          "name": "Параметр",
+          "description": "Имя параметра (например, enabled)"
+        },
+        "target_entity_id": {
+          "name": "Целевая сущность",
+          "description": "Сущность, в состояние которой записать результат"
+        }
+      }
+    },
+    "uci_set_commit": {
+      "name": "UCI: записать и применить",
+      "description": "Записывает значение UCI, сохраняет конфигурацию и при необходимости перезапускает службы",
+      "fields": {
+        "config_entry_id": {
+          "name": "Роутер",
+          "description": "Роутер, к которому обращаться. Можно не указывать, если настроен один роутер"
+        },
+        "config": {
+          "name": "Конфигурация",
+          "description": "Имя конфигурации UCI"
+        },
+        "section": {
+          "name": "Секция",
+          "description": "Имя секции или тип/индекс"
+        },
+        "option": {
+          "name": "Параметр",
+          "description": "Имя изменяемого параметра"
+        },
+        "value": {
+          "name": "Значение",
+          "description": "Новое значение (строка)"
+        },
+        "service": {
+          "name": "Службы",
+          "description": "Служба или список служб, которые нужно перезапустить после изменения"
+        }
+      }
+    },
+    "uci_network_interface": {
+      "name": "ubus: вызвать метод",
+      "description": "Вызывает метод объекта ubus (например, network.interface.wwan up)",
+      "fields": {
+        "config_entry_id": {
+          "name": "Роутер",
+          "description": "Роутер, к которому обращаться. Можно не указывать, если настроен один роутер"
+        },
+        "section": {
+          "name": "Объект",
+          "description": "Объект ubus (например, network.interface.wwan)"
+        },
+        "option": {
+          "name": "Метод",
+          "description": "Метод объекта (например, up или down)"
+        }
+      }
+    }
+  }
+}

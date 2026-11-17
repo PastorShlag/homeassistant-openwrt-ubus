@@ -30,6 +30,7 @@ from .Ubus import Ubus
 from .Ubus.const import API_RPC_CALL
 from .extended_ubus import ExtendedUbus
 from .Ubus.interface import AuthenticationError
+from .const import CONF_STALE_DEVICE_DAYS, CONNECTION_KEYS, DEFAULT_STALE_DEVICE_DAYS, entry_setting, split_entry_data
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
@@ -326,7 +327,7 @@ async def get_connected_wifi_devices(hass: HomeAssistant, data: dict[str, Any]) 
 class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for openwrt ubus."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -609,8 +610,9 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
                 **user_input,
             }
 
+            connection_data, options = split_entry_data(config_data)
             info = {"title": f"OpenWrt ubus {config_data[CONF_HOST]}"}
-            return self.async_create_entry(title=info["title"], data=config_data)
+            return self.async_create_entry(title=info["title"], data=connection_data, options=options)
 
         return self.async_show_form(
             step_id="timeouts",
@@ -668,9 +670,6 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                 else:
                     user_input[CONF_WIRED_TRACKER_INTERFACES] = []
 
-            # Get current data and merge with new options
-            new_data = dict(self.config_entry.data)
-            new_data.update(user_input)
             self._temp_data = user_input
 
             # If sta sensors enabled, proceed to selection config
@@ -680,7 +679,7 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
             return await self._update_and_reload(user_input)
 
         # Create form with all configurable options
-        current_data = self.config_entry.data
+        current_data = {**self.config_entry.data, **self.config_entry.options}
         options_schema = vol.Schema(
             {
                 vol.Optional(CONF_USE_HTTPS, default=current_data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)): bool,
@@ -797,6 +796,10 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                     CONF_CONSIDER_HOME,
                     default=current_data.get(CONF_CONSIDER_HOME, DEFAULT_CONSIDER_HOME),
                 ): vol.All(vol.Coerce(int), vol.Range(min=0, max=1800)),
+                vol.Optional(
+                    CONF_STALE_DEVICE_DAYS,
+                    default=current_data.get(CONF_STALE_DEVICE_DAYS, DEFAULT_STALE_DEVICE_DAYS),
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=3650)),
                 vol.Optional("refresh_services", default=False): bool,
             }
         )
@@ -812,17 +815,8 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Update config with selected services
-            new_data = dict(self.config_entry.data)
-            new_data.update(user_input)
-
-            # Update the config entry
-            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-
-            # Reload the integration
-            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-
-            return self.async_create_entry(title="", data={})
+            # Services chosen here are saved together with the earlier form values
+            return await self._save({**self._temp_data, **user_input})
 
         # Get available services
         if not self._available_services:
@@ -838,7 +832,7 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         # Create multi-select schema for services.
         # Include previously-saved services that are no longer on the router so
         # the user can deselect them (avoids "not a valid option" errors).
-        current_services = self.config_entry.data.get(CONF_SELECTED_SERVICES, [])
+        current_services = entry_setting(self.config_entry, CONF_SELECTED_SERVICES, [])
         options_dict = {service: service for service in (self._available_services or [])}
         for svc in current_services:
             if svc not in options_dict:
@@ -872,15 +866,15 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
 
         # Fetch currently connected devices
         if not self._available_sta_devices:
-            self._available_sta_devices = await get_connected_wifi_devices(self.hass, self.config_entry.data)
+            self._available_sta_devices = await get_connected_wifi_devices(self.hass, {**self.config_entry.data, **self.config_entry.options})
 
         # Include previously selected offline devices so they can be toggled off
-        current_selected = self.config_entry.data.get(CONF_SELECTED_STA, [])
+        current_selected = entry_setting(self.config_entry, CONF_SELECTED_STA, [])
         for mac in current_selected:
             if mac not in self._available_sta_devices:
                 self._available_sta_devices[mac] = f"Offline Device ({mac})"
 
-        current_data = self.config_entry.data
+        current_data = {**self.config_entry.data, **self.config_entry.options}
         sta_sensors_schema = vol.Schema(
             {
                 vol.Required(
@@ -901,12 +895,18 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         )
 
     async def _update_and_reload(self, user_input: dict[str, Any]) -> ConfigFlowResult:
-        """Persist options and reload the integration."""
-        new_data = dict(self.config_entry.data)
-        new_data.update(user_input)
-        self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-        await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-        return self.async_create_entry(title="", data={})
+        """Persist the form values (the entry reloads itself through its update listener)."""
+        return await self._save(user_input)
+
+    async def _save(self, updates: dict[str, Any]) -> ConfigFlowResult:
+        """Store connection settings in data and everything else in options, in one update."""
+        entry = self.config_entry
+        updates = {k: v for k, v in updates.items() if k != "refresh_services"}
+        connection = {k: v for k, v in updates.items() if k in CONNECTION_KEYS}
+        options = {**entry.options, **{k: v for k, v in updates.items() if k not in CONNECTION_KEYS}}
+        self.hass.config_entries.async_update_entry(entry, data={**entry.data, **connection}, options=options)
+        # Same options as just stored: no second update, hence a single reload
+        return self.async_create_entry(title="", data=options)
 
 
 class CannotConnect(HomeAssistantError):

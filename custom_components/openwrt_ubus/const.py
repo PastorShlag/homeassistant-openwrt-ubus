@@ -1,6 +1,13 @@
 """Constants for the openwrt_ubus integration."""
 
-from homeassistant.const import Platform
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_IP_ADDRESS,
+    CONF_PASSWORD,
+    CONF_USERNAME,
+    CONF_VERIFY_SSL,
+    Platform,
+)
 
 DOMAIN = "openwrt_ubus"
 PLATFORMS = [Platform.DEVICE_TRACKER, Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
@@ -86,6 +93,10 @@ DEFAULT_ENABLE_WIRELESS_TRACKERS = False
 DEFAULT_SELECT_ALL_STA = False
 DEFAULT_SELECTED_STA = []  # Empty list means no devices selected (only matters when select_all_sta is False)
 
+# Stale device cleanup: remove client devices not seen for this many days (0 = never)
+CONF_STALE_DEVICE_DAYS = "stale_device_days"
+DEFAULT_STALE_DEVICE_DAYS = 30
+
 # Consider home configuration
 CONF_CONSIDER_HOME = "consider_home"
 DEFAULT_CONSIDER_HOME = 300  # seconds before marking device as not_home
@@ -160,3 +171,33 @@ def build_configuration_url(host: str, use_https: bool = False, port: int | None
     scheme = "https" if use_https else "http"
     host_port = _build_host_port(host, use_https, port)
     return f"{scheme}://{host_port}"
+
+
+# Settings that identify and open the connection live in entry.data; everything else is an
+# option (entry.options) and can be changed from the options flow.
+CONNECTION_KEYS = frozenset(
+    {
+        CONF_HOST,
+        CONF_IP_ADDRESS,
+        CONF_USE_HTTPS,
+        CONF_PORT,
+        CONF_VERIFY_SSL,
+        CONF_ENDPOINT,
+        CONF_USERNAME,
+        CONF_PASSWORD,
+    }
+)
+
+
+def entry_setting(entry, key, default=None):
+    """Return a setting: options first, then data (older entries), then the default."""
+    if key in entry.options:
+        return entry.options[key]
+    return entry.data.get(key, default)
+
+
+def split_entry_data(data):
+    """Split a flat settings dict into (connection data, options)."""
+    connection = {k: v for k, v in data.items() if k in CONNECTION_KEYS}
+    options = {k: v for k, v in data.items() if k not in CONNECTION_KEYS}
+    return connection, options

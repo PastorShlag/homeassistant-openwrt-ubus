@@ -29,6 +29,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .device_utils import get_device_id, link_via
+from .const import entry_setting
 from .const import (
     CONF_CONSIDER_HOME,
     CONF_DHCP_SOFTWARE,
@@ -181,7 +182,7 @@ async def async_setup_entry(
     """Set up device tracker from a config entry."""
 
     # Get tracking method configuration
-    tracking_method = entry.data.get(CONF_TRACKING_METHOD, DEFAULT_TRACKING_METHOD)
+    tracking_method = entry_setting(entry, CONF_TRACKING_METHOD, DEFAULT_TRACKING_METHOD)
 
     # Check if tracking method changed and perform migration if needed
     # Store the current tracking method in hass.data for comparison on reload
@@ -205,17 +206,17 @@ async def async_setup_entry(
     # Check if wired tracker is enabled
     enable_wired_tracker = entry.options.get(
         CONF_ENABLE_WIRED_TRACKER,
-        entry.data.get(CONF_ENABLE_WIRED_TRACKER, DEFAULT_ENABLE_WIRED_TRACKER),
+        entry_setting(entry, CONF_ENABLE_WIRED_TRACKER, DEFAULT_ENABLE_WIRED_TRACKER),
     )
 
     # Check if wireless tracker is enabled
     enable_wireless_trackers = entry.options.get(
         CONF_ENABLE_WIRELESS_TRACKERS,
-        entry.data.get(CONF_ENABLE_WIRELESS_TRACKERS, DEFAULT_ENABLE_WIRELESS_TRACKERS),
+        entry_setting(entry, CONF_ENABLE_WIRELESS_TRACKERS, DEFAULT_ENABLE_WIRELESS_TRACKERS),
     )
     wireless_whitelist = entry.options.get(
         CONF_WIRELESS_TRACKER_WHITELIST,
-        entry.data.get(CONF_WIRELESS_TRACKER_WHITELIST, []),
+        entry_setting(entry, CONF_WIRELESS_TRACKER_WHITELIST, []),
     )
 
     # Determine which data types the coordinator needs
@@ -450,7 +451,7 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
         self._last_seen: datetime | None = None
         _entry = coordinator.data_manager.entry
         consider_home_seconds = _entry.options.get(
-            CONF_CONSIDER_HOME, _entry.data.get(CONF_CONSIDER_HOME, DEFAULT_CONSIDER_HOME)
+            CONF_CONSIDER_HOME, entry_setting(_entry, CONF_CONSIDER_HOME, DEFAULT_CONSIDER_HOME)
         )
         self._consider_home = timedelta(seconds=consider_home_seconds)
 

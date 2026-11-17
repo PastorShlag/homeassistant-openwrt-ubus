@@ -20,6 +20,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from . import API_DEF_TIMEOUT
+from .const import entry_setting
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
@@ -65,27 +66,27 @@ class SharedUbusDataManager:
         # Get timeout values from configuration (priority: options > data > default)
         system_timeout = entry.options.get(
             CONF_SYSTEM_SENSOR_TIMEOUT,
-            entry.data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT),
+            entry_setting(entry, CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT),
         )
         qmodem_timeout = entry.options.get(
             CONF_QMODEM_SENSOR_TIMEOUT,
-            entry.data.get(CONF_QMODEM_SENSOR_TIMEOUT, DEFAULT_QMODEM_SENSOR_TIMEOUT),
+            entry_setting(entry, CONF_QMODEM_SENSOR_TIMEOUT, DEFAULT_QMODEM_SENSOR_TIMEOUT),
         )
         sta_timeout = entry.options.get(
             CONF_STA_SENSOR_TIMEOUT,
-            entry.data.get(CONF_STA_SENSOR_TIMEOUT, DEFAULT_STA_SENSOR_TIMEOUT),
+            entry_setting(entry, CONF_STA_SENSOR_TIMEOUT, DEFAULT_STA_SENSOR_TIMEOUT),
         )
         ap_timeout = entry.options.get(
             CONF_AP_SENSOR_TIMEOUT,
-            entry.data.get(CONF_AP_SENSOR_TIMEOUT, DEFAULT_AP_SENSOR_TIMEOUT),
+            entry_setting(entry, CONF_AP_SENSOR_TIMEOUT, DEFAULT_AP_SENSOR_TIMEOUT),
         )
         service_timeout = entry.options.get(
             CONF_SERVICE_TIMEOUT,
-            entry.data.get(CONF_SERVICE_TIMEOUT, DEFAULT_SERVICE_TIMEOUT),
+            entry_setting(entry, CONF_SERVICE_TIMEOUT, DEFAULT_SERVICE_TIMEOUT),
         )
         mwan3_timeout = entry.options.get(
             CONF_MWAN3_SENSOR_TIMEOUT,
-            entry.data.get(CONF_MWAN3_SENSOR_TIMEOUT, DEFAULT_MWAN3_SENSOR_TIMEOUT),
+            entry_setting(entry, CONF_MWAN3_SENSOR_TIMEOUT, DEFAULT_MWAN3_SENSOR_TIMEOUT),
         )
 
         self._update_intervals: Dict[str, timedelta] = {
@@ -113,6 +114,8 @@ class SharedUbusDataManager:
         # Initialize ubus clients
         self._ubus_clients: Dict[str, ExtendedUbus] = {}
         self._client_lock = asyncio.Lock()
+        # Set by the integration setup (StaleDeviceCleaner); None until then
+        self.stale_cleaner = None
         self._connect_failed = False
         self._session = None
 
@@ -324,8 +327,8 @@ class SharedUbusDataManager:
 
     async def _fetch_device_statistics(self) -> Dict[str, Any]:
         """Fetch device statistics from wireless interfaces."""
-        wireless_software = self.entry.data.get(CONF_WIRELESS_SOFTWARE, "iwinfo")
-        dhcp_software = self.entry.data.get(CONF_DHCP_SOFTWARE, "dnsmasq")
+        wireless_software = entry_setting(self.entry, CONF_WIRELESS_SOFTWARE, "iwinfo")
+        dhcp_software = entry_setting(self.entry, CONF_DHCP_SOFTWARE, "dnsmasq")
 
         try:
             # Get MAC to name/IP mapping (includes /etc/ethers)
@@ -585,7 +588,7 @@ class SharedUbusDataManager:
         # Check if wired tracker is enabled
         enabled = self.entry.options.get(
             CONF_ENABLE_WIRED_TRACKER,
-            self.entry.data.get(CONF_ENABLE_WIRED_TRACKER, DEFAULT_ENABLE_WIRED_TRACKER),
+            entry_setting(self.entry, CONF_ENABLE_WIRED_TRACKER, DEFAULT_ENABLE_WIRED_TRACKER),
         )
         
         if not enabled:
@@ -609,15 +612,15 @@ class SharedUbusDataManager:
             # Get configuration
             name_priority = self.entry.options.get(
                 CONF_WIRED_TRACKER_NAME_PRIORITY,
-                self.entry.data.get(CONF_WIRED_TRACKER_NAME_PRIORITY, DEFAULT_WIRED_TRACKER_NAME_PRIORITY),
+                entry_setting(self.entry, CONF_WIRED_TRACKER_NAME_PRIORITY, DEFAULT_WIRED_TRACKER_NAME_PRIORITY),
             )
             whitelist = self.entry.options.get(
                 CONF_WIRED_TRACKER_WHITELIST,
-                self.entry.data.get(CONF_WIRED_TRACKER_WHITELIST, DEFAULT_WIRED_TRACKER_WHITELIST),
+                entry_setting(self.entry, CONF_WIRED_TRACKER_WHITELIST, DEFAULT_WIRED_TRACKER_WHITELIST),
             )
             interface_filter = self.entry.options.get(
                 CONF_WIRED_TRACKER_INTERFACES,
-                self.entry.data.get(CONF_WIRED_TRACKER_INTERFACES, DEFAULT_WIRED_TRACKER_INTERFACES),
+                entry_setting(self.entry, CONF_WIRED_TRACKER_INTERFACES, DEFAULT_WIRED_TRACKER_INTERFACES),
             )
 
             # Warn if no filtering is configured
@@ -690,7 +693,7 @@ class SharedUbusDataManager:
                         wired_devices[mac]["state"] = neighbor.get("state")
 
             # Get hostname mapping
-            dhcp_software = self.entry.data.get(CONF_DHCP_SOFTWARE, DEFAULT_DHCP_SOFTWARE)
+            dhcp_software = entry_setting(self.entry, CONF_DHCP_SOFTWARE, DEFAULT_DHCP_SOFTWARE)
             mac2name = await self._get_mac2name_mapping(dhcp_software)
 
             # Set display name based on priority
@@ -726,7 +729,7 @@ class SharedUbusDataManager:
         client = await self._get_ubus_client("nlbwmon")
 
         try:
-            dhcp_software = self.entry.data.get(CONF_DHCP_SOFTWARE, DEFAULT_DHCP_SOFTWARE)
+            dhcp_software = entry_setting(self.entry, CONF_DHCP_SOFTWARE, DEFAULT_DHCP_SOFTWARE)
             mac2name = await self._get_mac2name_mapping(dhcp_software)
 
             result = await client.file_exec(
@@ -1053,6 +1056,17 @@ class SharedUbusDataManager:
         if not self.is_reachable:
             # Entities become unavailable; they recover on the first successful poll
             raise UpdateFailed(f"OpenWrt device {self.entry.data.get(CONF_HOST)} is unreachable")
+
+        if self.stale_cleaner is not None:
+            seen: list[str] = []
+            found_clients_key = False
+            for key in ("device_statistics", "wired_devices"):
+                devices = combined_data.get(key)
+                if isinstance(devices, dict):
+                    found_clients_key = True
+                    seen.extend(devices.keys())
+            if found_clients_key:
+                self.stale_cleaner.mark_seen(seen)
 
         return combined_data
 

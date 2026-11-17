@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
 from homeassistant.exceptions import HomeAssistantError
 
+from ..const import entry_setting
 from ..const import DOMAIN, CONF_TRACKING_METHOD, DEFAULT_TRACKING_METHOD
 from ..device_utils import get_device_id
 from ..shared_data_manager import SharedDataUpdateCoordinator
@@ -123,7 +124,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up device kick buttons for OpenWrt."""
     _LOGGER.info("Setting up OpenWrt device kick buttons")
-    tracking_method = entry.data.get(CONF_TRACKING_METHOD, DEFAULT_TRACKING_METHOD)
+    tracking_method = entry_setting(entry, CONF_TRACKING_METHOD, DEFAULT_TRACKING_METHOD)
 
     # Migrate button unique_ids if needed
     await _migrate_kick_button_unique_ids(hass, entry, tracking_method)

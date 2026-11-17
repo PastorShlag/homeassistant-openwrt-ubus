@@ -125,7 +125,10 @@
           "sta_sensor_timeout": "Station Sensor Update Interval (seconds)",
           "ap_sensor_timeout": "Access Point Sensor Update Interval (seconds)",
           "mwan3_sensor_timeout": "mwan3 Status Update Interval (seconds)",
-          "tracking_method": "Tracking Method"
+          "tracking_method": "Tracking Method",
+          "consider_home": "Consider Home Time (seconds)",
+          "wired_tracker_interfaces": "Wired Device Interfaces",
+          "stale_device_days": "Remove devices not seen for (days)"
         },
         "data_description": {
           "use_https": "Whether to use HTTPS (SSL/TLS) when connecting to the router",
@@ -151,7 +154,10 @@
           "ap_sensor_timeout": "How often to update access point data (30-600 seconds)",
           "tracking_method": "Tracking method for devices: 'uniqueid' uses MAC address only (device roams between APs), 'combined' uses AP+MAC (separate entities per AP)",
           "mwan3_sensor_timeout": "How often to update mwan3 status data (30-600 seconds)",
-          "enable_mwan3_sensors": "Monitor mwan3 multi-WAN load balancing status"
+          "enable_mwan3_sensors": "Monitor mwan3 multi-WAN load balancing status",
+          "consider_home": "How long a device stays 'home' after it was last seen (0-1800 seconds)",
+          "wired_tracker_interfaces": "Comma-separated interface names to track (e.g., br-lan). Leave empty for all interfaces",
+          "stale_device_days": "Client devices that were not seen on the router for this many days are removed from Home Assistant. 0 disables the cleanup"
         }
       },
       "sta_sensors_config": {
@@ -161,7 +167,18 @@
           "select_all_sta": "Track all connected stations (no filter)",
           "selected_sta": "Devices to Track"
         }
+      },
+      "services": {
+        "title": "OpenWrt ubus - Service Selection",
+        "description": "Select services to control for {host} (found {services_count} services)",
+        "data": {
+          "selected_services": "Services to Control"
+        }
       }
+    },
+    "error": {
+      "cannot_get_services": "Failed to get services list",
+      "no_services_found": "No services found on the router"
     }
   },
   "entity": {

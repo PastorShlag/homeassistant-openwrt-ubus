@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -52,45 +53,36 @@ async def async_setup_entry(
     """Set up OpenWrt buttons from a config entry."""
     _LOGGER.info("Setting up OpenWrt buttons")
 
-    coordinators = []
-
-    # Setup each button module based on configuration
-    for button_config in BUTTON_MODULES:
+    # The modules are independent, so set them up concurrently (each does its own first refresh)
+    async def _setup_module(button_config: dict):
         module = button_config["module"]
-        config_key = button_config["config_key"]
-        default_enabled = button_config["default"]
         module_name = button_config["name"]
 
-        # Check if this button type is enabled
         # Priority: options > data > default
-        enabled = entry.options.get(config_key, entry.data.get(config_key, default_enabled))
-
+        enabled = entry.options.get(
+            button_config["config_key"], entry.data.get(button_config["config_key"], button_config["default"])
+        )
         if not enabled:
             _LOGGER.info("Button module %s is disabled in configuration", module_name)
-            continue
+            return None
+        if not hasattr(module, "async_setup_entry"):
+            _LOGGER.warning("Button module %s has no async_setup_entry function", module_name)
+            return None
 
         try:
-            # Check if module has async_setup_entry function
-            if hasattr(module, "async_setup_entry"):
-                _LOGGER.debug("Loading button module: %s", module_name)
-
-                # For device_kick_button, we need to pass the add_entities callback
-                if module_name == "device_kick_button":
-                    await module.async_setup_entry(hass, entry, async_add_entities)
-                else:
-                    # Call the module's setup function
-                    coordinator = await module.async_setup_entry(hass, entry, async_add_entities)
-
-                    if coordinator:
-                        coordinators.append(coordinator)
-                        _LOGGER.info("Successfully loaded button module: %s", module_name)
-                    else:
-                        _LOGGER.debug("Button module %s returned no coordinator", module_name)
-            else:
-                _LOGGER.warning("Button module %s has no async_setup_entry function", module_name)
-
-        except Exception as exc:
+            _LOGGER.debug("Loading button module: %s", module_name)
+            coordinator = await module.async_setup_entry(hass, entry, async_add_entities)
+        except Exception as exc:  # noqa: BLE001 - one broken module must not break the others
             _LOGGER.error("Error setting up button module %s: %s", module_name, exc)
+            return None
+
+        # device_kick_button registers its own coordinator and returns nothing
+        if coordinator:
+            _LOGGER.info("Successfully loaded button module: %s", module_name)
+        return coordinator
+
+    results = await asyncio.gather(*(_setup_module(cfg) for cfg in BUTTON_MODULES))
+    coordinators = [c for c in results if c]
 
     _LOGGER.info("Completed loading of %d button modules", len(coordinators))
 

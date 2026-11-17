@@ -30,6 +30,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from ..device_utils import get_device_id, link_via
+from ..const import entry_setting
 from ..const import (
     DOMAIN,
     CONF_USE_HTTPS,
@@ -212,7 +213,7 @@ async def async_setup_entry(
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
         CONF_QMODEM_SENSOR_TIMEOUT,
-        entry.data.get(CONF_QMODEM_SENSOR_TIMEOUT, DEFAULT_QMODEM_SENSOR_TIMEOUT),
+        entry_setting(entry, CONF_QMODEM_SENSOR_TIMEOUT, DEFAULT_QMODEM_SENSOR_TIMEOUT),
     )
     scan_interval = timedelta(seconds=timeout)
 

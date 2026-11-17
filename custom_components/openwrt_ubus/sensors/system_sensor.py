@@ -33,6 +33,7 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
+from ..const import entry_setting
 from ..const import (
     DOMAIN,
     CONF_USE_HTTPS,
@@ -224,7 +225,7 @@ async def async_setup_entry(
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
         CONF_SYSTEM_SENSOR_TIMEOUT,
-        entry.data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT),
+        entry_setting(entry, CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT),
     )
     scan_interval = timedelta(seconds=timeout)
 

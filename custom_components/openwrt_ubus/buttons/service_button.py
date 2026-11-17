@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from ..const import entry_setting
 from ..const import (
     CONF_SELECTED_SERVICES,
     CONF_ENABLE_SERVICE_CONTROLS,
@@ -29,12 +30,12 @@ async def async_setup_entry(
     """Set up service restart button entities from a config entry."""
 
     # Check if service controls are enabled
-    if not entry.data.get(CONF_ENABLE_SERVICE_CONTROLS, False):
+    if not entry_setting(entry, CONF_ENABLE_SERVICE_CONTROLS, False):
         _LOGGER.debug("Service controls disabled, skipping service restart button setup")
         return
 
     # Get selected services
-    selected_services = entry.data.get(CONF_SELECTED_SERVICES, [])
+    selected_services = entry_setting(entry, CONF_SELECTED_SERVICES, [])
     if not selected_services:
         _LOGGER.debug("No services selected, skipping service restart button setup")
         return

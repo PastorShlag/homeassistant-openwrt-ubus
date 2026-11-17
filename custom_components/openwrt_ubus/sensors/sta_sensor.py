@@ -25,6 +25,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from ..device_utils import get_device_id, link_via
+from ..const import entry_setting
 from ..const import (
     DOMAIN,
     CONF_STA_SENSOR_TIMEOUT,
@@ -426,21 +427,21 @@ async def async_setup_entry(
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
         CONF_STA_SENSOR_TIMEOUT,
-        entry.data.get(CONF_STA_SENSOR_TIMEOUT, DEFAULT_STA_SENSOR_TIMEOUT),
+        entry_setting(entry, CONF_STA_SENSOR_TIMEOUT, DEFAULT_STA_SENSOR_TIMEOUT),
     )
     scan_interval = timedelta(seconds=timeout)
 
     # Get tracking method from configuration
-    tracking_method = entry.data.get(CONF_TRACKING_METHOD, DEFAULT_TRACKING_METHOD)
+    tracking_method = entry_setting(entry, CONF_TRACKING_METHOD, DEFAULT_TRACKING_METHOD)
 
     # Get STA sensor filter configuration
     select_all_sta = entry.options.get(
         CONF_SELECT_ALL_STA,
-        entry.data.get(CONF_SELECT_ALL_STA, DEFAULT_SELECT_ALL_STA),
+        entry_setting(entry, CONF_SELECT_ALL_STA, DEFAULT_SELECT_ALL_STA),
     )
     selected_sta = entry.options.get(
         CONF_SELECTED_STA,
-        entry.data.get(CONF_SELECTED_STA, DEFAULT_SELECTED_STA),
+        entry_setting(entry, CONF_SELECTED_STA, DEFAULT_SELECTED_STA),
     )
 
     # Migrate sensor unique_ids if needed
