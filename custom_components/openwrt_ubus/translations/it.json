@@ -348,10 +348,5 @@
       }
     }
   },
-  "services": {
-    "scan_devices": {
-      "name": "Scansione dispositivi",
-      "description": "Avvia manualmente una scansione dei dispositivi sul router OpenWrt"
-    }
-  }
+  "services": {}
 }
