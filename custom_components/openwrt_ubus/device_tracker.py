@@ -286,8 +286,12 @@ async def async_setup_entry(
                     all_devices[mac] = device_info
 
         # Extract MAC addresses from all devices
-        current_devices = set(all_devices.keys())
-        new_devices = current_devices - coordinator.known_devices
+        current_devices = {mac.upper() for mac in all_devices}
+        new_devices = {
+            mac
+            for mac in current_devices - coordinator.known_devices
+            if not (tracking_method == "uniqueid" and _owned_by_other_entry(hass, entry, mac))
+        }
 
         if new_devices:
             _LOGGER.info("Found %d new devices for tracking: %s", len(new_devices), new_devices)
@@ -352,6 +356,20 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_handle_coordinator_update))
 
 
+def _owned_by_other_entry(hass: HomeAssistant, entry: ConfigEntry, mac_address: str) -> bool:
+    """Return True if another router's tracker already has an entity for this MAC.
+
+    With tracking_method "uniqueid" the unique_id is the bare MAC, so a device seen by two
+    routers must get ONE entity. Creating a second entity object makes Home Assistant log
+    "Platform openwrt_ubus does not generate unique IDs".
+    """
+    coordinators = hass.data.get(DOMAIN, {}).get("tracker_coordinators", {})
+    return any(
+        entry_id != entry.entry_id and mac_address in other.known_devices
+        for entry_id, other in coordinators.items()
+    )
+
+
 async def _create_entities_for_devices(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -371,6 +389,11 @@ async def _create_entities_for_devices(
         # Skip if already in known devices
         if mac_address in coordinator.known_devices:
             _LOGGER.debug("Device %s already in known devices, skipping", mac_address)
+            continue
+
+        # uniqueid tracking: one entity per MAC across all routers
+        if tracking_method == "uniqueid" and _owned_by_other_entry(hass, entry, mac_address):
+            _LOGGER.debug("Device %s is already tracked through another router, skipping", mac_address)
             continue
 
         # Generate unique_id based on tracking method
@@ -463,14 +486,16 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
         """
         # First try the local coordinator (most likely case)
         # Check WiFi devices (device_statistics)
-        device_stats = self.coordinator.data.get("device_statistics", {})
+        # Data of a router that failed its last poll is stale and must not keep devices "home"
+        local_data = (self.coordinator.data if self.coordinator.last_update_success else None) or {}
+        device_stats = local_data.get("device_statistics", {})
         device_data = device_stats.get(self.mac_address) or device_stats.get(self.mac_address.upper())
 
         if device_data and device_data.get("connected"):
             return device_data, self._host
 
         # Check wired devices
-        wired_devices = self.coordinator.data.get("wired_devices", {})
+        wired_devices = local_data.get("wired_devices", {})
         wired_data = wired_devices.get(self.mac_address) or wired_devices.get(self.mac_address.upper())
 
         if wired_data and wired_data.get("connected"):
@@ -486,8 +511,8 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
                 if other_coordinator == self.coordinator:
                     continue
 
-                # Check if coordinator has data
-                if not other_coordinator.data:
+                # Skip routers without data or whose last poll failed (stale data)
+                if not other_coordinator.data or not other_coordinator.last_update_success:
                     continue
 
                 # Look for device in this coordinator's WiFi data
@@ -540,6 +565,16 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
                 device_info_dict["via_device_id"] = parent_id
 
         return DeviceInfo(**device_info_dict)
+
+    @property
+    def available(self) -> bool:
+        """With uniqueid tracking the entity belongs to one router but follows the device
+        across all of them, so it is available while any router is reachable."""
+        if self._tracking_method == "uniqueid" and self.hass is not None:
+            coordinators = self.hass.data.get(DOMAIN, {}).get("tracker_coordinators", {}).values()
+            if any(coordinator.last_update_success for coordinator in coordinators):
+                return True
+        return super().available
 
     @property
     def ap_device(self) -> str:
@@ -768,6 +803,11 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
 
     def _device_data(self) -> dict[str, Any] | None:
         """Get device data from either device_statistics (WiFi) or wired_devices."""
+        if self._tracking_method == "uniqueid":
+            # The device may be connected to another router right now
+            data, _host = self._get_device_data_from_any_coordinator()
+            if data:
+                return data
         # Try WiFi devices first
         device_stats = self.coordinator.data.get("device_statistics", {})
         device_data = device_stats.get(self._attr_mac_address) or device_stats.get(self._attr_mac_address.upper())
